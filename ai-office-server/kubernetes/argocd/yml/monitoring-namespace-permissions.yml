@@ -1,19 +1,21 @@
-# Allow Prometheus (monitoring namespace) to scrape metrics endpoints mesh-wide.
-# Applied in istio-system as the root namespace per mesh config.
+# Allow Prometheus (monitoring namespace) to scrape all services in this namespace.
+# Uses a scoped selector to only affect the Prometheus server's ingress traffic,
+# not the entire namespace.
+# This replaces the old namespace-wide monitoring-policy which blocked all traffic.
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
-  name: prometheus-scrape
-  namespace: istio-system
+  name: prometheus-server-policy
+  namespace: monitoring
 spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
   action: ALLOW
   rules:
     - from:
         - source:
-            namespaces: ["monitoring"]
-      to:
-        - operation:
-            ports: ["9090", "9003", "8080", "15020", "80", "16686", "20001", "20201"]
+            namespaces: ["argocd", "istio-system", "monitoring", "opencost"]
 ---
 # ReferenceGrants for cross-namespace HTTPRoutes
 apiVersion: gateway.networking.k8s.io/v1beta1
@@ -48,8 +50,6 @@ spec:
       kind: Service
 ---
 # Only protect the Grafana UI and Alertmanager, not namespace-wide.
-# Prometheus needs to receive scrapes from all namespaces — managed by
-# the workload-level prometheus-scrape policy in istio-system.
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
